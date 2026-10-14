@@ -4,7 +4,7 @@
 
 Use the existing `/workspace/autoai-india` checkout; cloud tasks are already isolated. Do not create a worktree or inspect previous AutoAI India checkouts. Confirm Node major version 24, run `npm ci` when dependencies need refreshing, then `npm run build` and `npm start`. The build validates the API, Next.js site, and Expo web/Android/iOS bundles. The API uses port 4000 by default. The server process must restart in future tasks; installed files are not live processes.
 
-Readiness is demonstrated by `GET /api/health` (status ok), `GET /api/catalogue` (vehicles array), `npm run test:smoke`, and the test suite. Start the website separately with `npm run start:web`. An empty verified catalogue is normal. For the Expo shell use `npm run dev:mobile`; a physical device needs `EXPO_PUBLIC_API_URL` set to an address it can reach rather than loopback.
+Readiness is demonstrated by `GET /api/health` (status ok), `GET /api/catalogue` (vehicles array), `npm run test:smoke`, and the test suite. Start the website separately with `npm run start:web`; it binds port 3000 on `0.0.0.0` so the cloud preview can detect it. An empty verified catalogue is normal. For the Expo shell use `npm run dev:mobile`; a physical device needs `EXPO_PUBLIC_API_URL` set to an address it can reach rather than loopback.
 
 ## Stop and restart
 

@@ -16,7 +16,7 @@ npm start
 npm run start:web
 ```
 
-The API listens on loopback port 4000 and the website on port 3000. `npm run dev` runs both with source watching. `GET /api/health` reports persistence and integration status; `GET /api/catalogue` initially returns an empty list. This is intentional: no invented public catalogue or stock is seeded.
+The API listens on loopback port 4000 and the preview-compatible website listens on all interfaces at port 3000. `npm run dev` runs both with source watching. `GET /api/health` reports persistence and integration status; `GET /api/catalogue` initially returns an empty list. This is intentional: no invented public catalogue or stock is seeded.
 
 ```sh
 npm run typecheck
