@@ -24,14 +24,34 @@ export function Studio() {
   useEffect(() => {
     let disposed = false;
     import("../../../packages/three-engine/src/index")
-      .then(({ VehicleViewer }) => {
+      .then(async ({ VehicleViewer }) => {
         if (disposed || !canvas.current) return;
         try {
           viewer.current = new VehicleViewer(canvas.current);
           setReady(true);
-        } catch {
+          const [assetResponse, manifestResponse] = await Promise.all([
+            fetch("/models/original-concept.glb"),
+            fetch("/models/original-concept.manifest.json"),
+          ]);
+          if (!assetResponse.ok || !manifestResponse.ok)
+            throw new Error("The bundled concept asset is unavailable.");
+          const parsed = interactionManifestSchema.parse(
+            await manifestResponse.json(),
+          );
+          const file = new File(
+            [await assetResponse.blob()],
+            "original-concept.glb",
+            { type: "model/gltf-binary" },
+          );
+          if (disposed || !viewer.current) return;
+          await viewer.current.loadLocalFile(file, parsed);
+          setManifest(parsed);
+          setConfiguration(viewer.current.save());
+        } catch (error) {
           setError(
-            "WebGL is unavailable in this browser. Enable hardware acceleration or use another supported browser.",
+            error instanceof Error
+              ? `The original 3D concept could not be loaded: ${error.message}`
+              : "The original 3D concept could not be loaded. Enable WebGL or open an approved local GLB below.",
           );
         }
       })
@@ -147,12 +167,8 @@ export function Studio() {
             }}
           >
             <span className="eyebrow">A SPACE FOR YOUR NEXT DRIVE</span>
-            <h2>Your model belongs here.</h2>
-            <p>
-              Load an approved, unbranded GLB and matching interaction manifest
-              below.
-            </p>
-            <p>No third-party vehicle asset is preloaded.</p>
+            <h2>Preparing the original concept.</h2>
+            <p>The bundled unbranded GLB is verified before display.</p>
           </div>
         )}
       </section>

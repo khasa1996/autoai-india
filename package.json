@@ -1,5 +1,5 @@
 {
-  "name": "autoai-india-greenfield",
+  "name": "autoai-india",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -35,6 +35,7 @@
     "test:assets-browser": "tsx tests/assets-browser/run.ts",
     "test:web-browser": "tsx tests/web-browser/run.ts",
     "test:mobile-browser": "tsx tests/mobile-browser/run.ts",
+    "assets:generate-concept": "tsx scripts/generate-concept-glb.mts",
     "test:smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

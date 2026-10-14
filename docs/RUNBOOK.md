@@ -14,6 +14,8 @@ Send SIGTERM to the API process you started. SQLite closes through Fastify's shu
 
 The local `.data` directory is intentionally ignored. Keep it private and never add it to Git. For a development backup, stop the API before copying the database and any WAL/SHM companion files as a set into private storage. Restore only into a separate test directory first and verify account/data access. No automated encrypted backup/restore system has been deployed.
 
+The bundled showroom asset is reproducible with `npm run assets:generate-concept`. The command creates an original unbranded GLB and a SHA-bound interaction manifest under `apps/web/public/models`; commit both outputs together after validation.
+
 ## Failure diagnosis
 
 - Missing dependencies: run `npm ci` using the writable npm cache configured in `.npmrc`.

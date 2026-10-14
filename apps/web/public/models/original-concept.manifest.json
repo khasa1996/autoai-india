@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "assetId": "autoai-original-concept-001",
+  "assetSha256": "81458fb0d0a39b7dd0b85340eaf8afeec222f3c5a98d790661ae8560d18aa357",
+  "license": {
+    "name": "AutoAI Original Asset",
+    "source": "Procedurally generated in this repository",
+    "permittedUse": "owned"
+  },
+  "paint": [
+    {
+      "id": "exterior",
+      "meshNames": [
+        "body_shell"
+      ],
+      "materialNames": [
+        "concept_paint"
+      ]
+    }
+  ],
+  "articulations": []
+}
