@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "AutoAI India",
+    "slug": "autoai-india-greenfield",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android", "web"],
+    "ios": { "supportsTablet": true, "bundleIdentifier": "in.autoai.greenfield" },
+    "android": { "package": "in.autoai.greenfield" },
+    "web": { "bundler": "metro" }
+  }
+}

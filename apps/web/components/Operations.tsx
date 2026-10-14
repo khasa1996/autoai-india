@@ -1,0 +1,66 @@
+'use client';
+
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+
+type Dealer = { id: string; name: string; source_url: string; verified_at: string };
+type Vehicle = { id: string; make: string; model: string; variant: string };
+type Offer = { id: string; vehicle_id: string; dealer_id: string; price_paise: number; stock: number; expires_at: string; verified_at: string };
+type Booking = { id: string; offer_id: string; status: string; price_paise: number; created_at: string };
+type Audit = { id: string; actor_id: string; action: string; entity_id: string; created_at: string };
+async function request<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
+  const response = await fetch(`/api${path}`, { credentials: 'same-origin', cache: 'no-store', ...(body === undefined ? {} : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : `Request failed (${response.status}).`);
+  return data as T;
+}
+const money = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+const date = (value: FormDataEntryValue | null) => new Date(String(value)).toISOString();
+const text = (data: FormData, name: string) => String(data.get(name) ?? '').trim();
+function Field({ name, label, type = 'text', ...props }: { name: string; label: string; type?: string; min?: number; max?: number; step?: number; minLength?: number }) { return <label className="field">{label}<input name={name} type={type} required {...props} /></label>; }
+function Provenance() { return <><Field name="sourceUrl" label="Verified source URL (HTTPS)" type="url" /><Field name="verifiedAt" label="Verified at (your local time)" type="datetime-local" /></>; }
+function MutationForm({ title, children, submit, done }: { title: string; children: ReactNode; submit: (data: FormData) => Promise<unknown>; done: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('');
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const form = event.currentTarget; setBusy(true); setError(''); setMessage('');
+    try { await submit(new FormData(form)); setMessage('Saved. The action is recorded in the audit log.'); form.reset(); await done(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Unable to save.'); } finally { setBusy(false); }
+  }
+  return <section className="panel"><h2 className="section-title">{title}</h2><form onSubmit={save}><fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}><div className="form-grid">{children}</div><button className="button" style={{ marginTop: 20 }} disabled={busy}>{busy ? 'Saving…' : title}</button></fieldset></form>{error && <p className="error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}</section>;
+}
+
+export function Operations({ section }: { section: 'dealer' | 'admin' }) {
+  const [role, setRole] = useState<string | null>(null), [checked, setChecked] = useState(false), [error, setError] = useState('');
+  const [dealers, setDealers] = useState<Dealer[]>([]), [vehicles, setVehicles] = useState<Vehicle[]>([]), [offers, setOffers] = useState<Offer[]>([]), [bookings, setBookings] = useState<Booking[]>([]), [events, setEvents] = useState<Audit[]>([]);
+  const [pending, setPending] = useState<string | null>(null);
+  const refresh = useCallback(async () => {
+    const catalogue = await request<{ vehicles: Vehicle[] }>('/catalogue'); setVehicles(catalogue.vehicles);
+    if (section === 'dealer') { const data = await request<{ dealers: Dealer[]; offers: Offer[]; bookings: Booking[] }>('/dealer/dashboard'); setDealers(data.dealers); setOffers(data.offers); setBookings(data.bookings); }
+    else { const [registry, audit] = await Promise.all([request<{ dealers: Dealer[] }>('/admin/dealers'), request<{ events: Audit[] }>('/admin/audit')]); setDealers(registry.dealers); setEvents(audit.events); }
+  }, [section]);
+  useEffect(() => { let active = true; setChecked(false); setError(''); request<{ user: { role: string } }>('/auth/me').then(async data => { if (!active) return; setRole(data.user.role); if (data.user.role === section) await refresh(); }).catch(e => { if (active) setError(e instanceof Error ? e.message : 'Unable to load workspace.'); }).finally(() => { if (active) setChecked(true); }); return () => { active = false; }; }, [section, refresh]);
+  const vehicleName = (id: string) => { const vehicle = vehicles.find(v => v.id === id); return vehicle ? `${vehicle.make} ${vehicle.model} ${vehicle.variant}` : id; };
+  const dealerSelect = <label className="field">Dealer<select name="dealerId" defaultValue="" required><option value="" disabled>Select verified dealer</option>{dealers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>;
+  async function updateBooking(id: string, status: 'confirmed' | 'cancelled') { setPending(id); setError(''); try { await request(`/bookings/${id}`, { status }, 'PATCH'); await refresh(); } catch (e) { setError(e instanceof Error ? e.message : 'Unable to update booking.'); } finally { setPending(null); } }
+  return <>
+    <div className="page-intro"><span className="eyebrow">{section === 'admin' ? 'PLATFORM OPERATIONS' : 'DEALER WORKSPACE'}</span><h1>{section === 'admin' ? 'Trust starts with the record.' : 'Your inventory. Your next customer.'}</h1><p className="lead">{section === 'admin' ? 'Review sources, authorize dealers and maintain a traceable catalogue.' : 'Manage verified stock and respond to booking requests for your dealerships.'}</p></div>
+    {error && <p className="error" role="alert">{error}</p>}
+    {!checked ? <p role="status">Checking your workspace…</p> : role !== section ? <section className="empty-state"><h2>{section === 'admin' ? 'Administrator access required' : 'Dealer membership required'}</h2><p>Sign in with an authorized {section} account. Registration creates a customer account; an administrator must assign dealer membership.</p><a className="button" href="/account">Go to account</a></section> : <>
+      <section className="notice">These records are local development data. Booking requests collect no payment and send no notifications. Verify source rights and freshness before saving.</section>
+      {section === 'dealer' && <>
+        <section className="panel"><h2 className="section-title">Booking requests</h2>{!bookings.length ? <p className="empty-state">No booking requests for your dealerships.</p> : <ul className="data-list">{bookings.map(b => <li key={b.id}><div><strong>{vehicleName(offers.find(o => o.id === b.offer_id)?.vehicle_id ?? b.offer_id)}</strong><p>{money(b.price_paise)} · {b.status}</p><small>Request {b.id} · {b.created_at}</small></div><div style={{ display: 'flex', gap: 8 }}>{b.status === 'requested' && <button className="button" disabled={pending !== null} onClick={() => updateBooking(b.id, 'confirmed')}>{pending === b.id ? 'Updating…' : 'Confirm request'}</button>}{['requested', 'confirmed'].includes(b.status) && <button className="button secondary" disabled={pending !== null} onClick={() => updateBooking(b.id, 'cancelled')}>Cancel & restore stock</button>}</div></li>)}</ul>}</section>
+        <section className="panel"><h2 className="section-title">Inventory offers</h2>{!offers.length ? <p className="empty-state">No offers yet. Add verified inventory below.</p> : <ul className="data-list">{offers.map(o => <li key={o.id}><strong>{vehicleName(o.vehicle_id)}</strong><p>{money(o.price_paise)} · {o.stock} available · {Date.parse(o.expires_at) <= Date.now() ? 'Expired' : 'Expires ' + o.expires_at}</p><small>Stock checked {o.verified_at}</small></li>)}</ul>}</section>
+      </>}
+      {section === 'admin' && <>
+        <MutationForm title="Add verified catalogue entry" done={refresh} submit={data => request('/admin/catalogue', { make: text(data, 'make'), model: text(data, 'model'), variant: text(data, 'variant'), fuel: text(data, 'fuel'), bodyType: text(data, 'bodyType'), pricePaise: Math.round(Number(data.get('price')) * 100), sourceUrl: text(data, 'sourceUrl'), verifiedAt: date(data.get('verifiedAt')), specifications: { seats: Number(data.get('seats')), transmission: text(data, 'transmission'), features: JSON.stringify(text(data, 'features').split('\n').map(s => s.trim()).filter(Boolean)), compatibleOptionIds: JSON.stringify(text(data, 'compatibleOptionIds').split('\n').map(s => s.trim()).filter(Boolean)), sourceType: text(data, 'sourceType'), retrievedAt: date(data.get('retrievedAt')) } })}>
+          <Field name="make" label="Make" /><Field name="model" label="Model" /><Field name="variant" label="Variant" /><label className="field">Fuel<select name="fuel" required defaultValue=""><option value="" disabled>Select fuel</option>{['petrol', 'diesel', 'electric', 'hybrid', 'cng'].map(v => <option key={v}>{v}</option>)}</select></label><Field name="bodyType" label="Body style" /><Field name="price" label="Ex-showroom price (INR)" type="number" min={0} max={10000000000} step={0.01} /><Field name="seats" label="Verified seat count" type="number" min={1} max={12} /><label className="field">Transmission<select name="transmission" required defaultValue=""><option value="" disabled>Select transmission</option><option>manual</option><option>automatic</option></select></label><label className="field">Verified features · one per line<textarea name="features" maxLength={290} /></label><label className="field">Compatible option IDs · one per line<textarea name="compatibleOptionIds" maxLength={290} /></label><label className="field">Source type<select name="sourceType" required defaultValue=""><option value="" disabled>Select source type</option><option>manufacturer</option><option>dealer</option><option>regulator</option></select></label><Field name="retrievedAt" label="Source retrieved at (local time)" type="datetime-local" /><Provenance /><p>The signed-in administrator is recorded as verifier. Empty lists explicitly declare no reviewed features or compatible options. Only fresh, complete records qualify for advisor recommendations.</p>
+        </MutationForm>
+        <MutationForm title="Accept verified dealer" done={refresh} submit={data => request('/admin/dealers', { name: text(data, 'name'), sourceUrl: text(data, 'sourceUrl'), verifiedAt: date(data.get('verifiedAt')) })}><Field name="name" label="Dealer legal / trading name" /><Provenance /><p>Saving records your administrator acceptance. Verify the dealer’s authorization before continuing.</p></MutationForm>
+        <MutationForm title="Assign dealer membership" done={refresh} submit={data => request('/admin/memberships', { userId: text(data, 'userId'), dealerId: text(data, 'dealerId') })}><Field name="userId" label="Existing registered user ID (UUID)" />{dealerSelect}<p>This grants the user access to the selected dealer’s inventory and bookings.</p></MutationForm>
+      </>}
+      {dealers.length && vehicles.length ? <MutationForm title="Create verified stock offer" done={refresh} submit={data => request('/offers', { vehicleId: text(data, 'vehicleId'), dealerId: text(data, 'dealerId'), pricePaise: Math.round(Number(data.get('price')) * 100), stock: Number(data.get('stock')), sourceUrl: text(data, 'sourceUrl'), verifiedAt: date(data.get('verifiedAt')), expiresAt: date(data.get('expiresAt')) })}>{dealerSelect}<label className="field">Catalogue vehicle<select name="vehicleId" required defaultValue=""><option value="" disabled>Select vehicle</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.make} {v.model} {v.variant}</option>)}</select></label><Field name="price" label="Offer price (INR)" type="number" min={0} max={10000000000} step={0.01} /><Field name="stock" label="Verified available stock" type="number" min={0} max={10000} step={1} /><Provenance /><Field name="expiresAt" label="Offer expiry (local time)" type="datetime-local" /><p>Stock must have been verified within 24 hours. Expiry must be in the future. Catalogue selection shows the first 100 records.</p></MutationForm> : <section className="empty-state"><h2>Inventory needs a verified source.</h2><p>An authorized dealer and a catalogue entry are required before creating an offer.</p></section>}
+      {section === 'admin' && <><section className="panel"><h2 className="section-title">Accepted dealers</h2>{!dealers.length ? <p>No accepted dealers.</p> : <ul className="data-list">{dealers.map(d => <li key={d.id}><strong>{d.name}</strong><p>{d.id}</p><a href={d.source_url} target="_blank" rel="noreferrer">Verification source</a><p>{d.verified_at}</p></li>)}</ul>}</section><section className="panel"><h2 className="section-title">Audit trail</h2><p>Latest 200 actions, newest first.</p>{!events.length ? <p>No recorded actions.</p> : <ul className="data-list">{events.map(e => <li key={e.id}><strong>{e.action}</strong><p>{e.created_at}</p><small style={{ overflowWrap: 'anywhere' }}>Actor {e.actor_id} · Record {e.entity_id}</small></li>)}</ul>}</section></>}
+    </>}
+  </>;
+}
+
+export default Operations;

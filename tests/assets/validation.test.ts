@@ -1,0 +1,20 @@
+import { describe, expect, it } from 'vitest';
+import { inspectGlb, exportCapabilities } from '../../services/asset-pipeline/src/index';
+import { interactionManifestSchema, validateConfiguration } from '../../packages/configurator/src/index';
+function glb(doc: unknown, binLength = 12) {
+  const raw = new TextEncoder().encode(JSON.stringify(doc)); const length = Math.ceil(raw.length / 4) * 4; const bytes = new ArrayBuffer(28 + length + binLength); const v = new DataView(bytes);
+  v.setUint32(0, 0x46546c67, true); v.setUint32(4, 2, true); v.setUint32(8, bytes.byteLength, true); v.setUint32(12, length, true); v.setUint32(16, 0x4e4f534a, true); new Uint8Array(bytes, 20, length).fill(32); new Uint8Array(bytes, 20, raw.length).set(raw); v.setUint32(20 + length, binLength, true); v.setUint32(24 + length, 0x004e4942, true); return bytes;
+}
+const minimal = () => ({ asset: { version: '2.0' }, buffers: [{ byteLength: 12 }], bufferViews: [{ buffer: 0, byteLength: 12 }], accessors: [{ bufferView: 0, componentType: 5126, type: 'VEC3', count: 1 }], meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }], nodes: [{ mesh: 0 }], scenes: [{ nodes: [0] }], scene: 0 });
+const manifest = () => ({ version: 1 as const, assetId: 'licensed-car', assetSha256: 'a'.repeat(64), license: { name: 'Owner supplied', source: 'local owner asset', permittedUse: 'owned' as const }, paint: [{ id: 'body', meshNames: ['Body'], materialNames: ['Paint'] }], articulations: [{ id: 'door', meshName: 'Door', pivot: [0, 0, 0], axis: [0, 1, 0], minRadians: 0, maxRadians: 1.2, closedRadians: 0 }] });
+describe('local asset admission', () => {
+  it('inspects embedded GLB geometry', () => expect(inspectGlb(glb(minimal())).meshCount).toBe(1));
+  it('rejects bad headers and truncated chunks', () => { expect(() => inspectGlb(new ArrayBuffer(20))).toThrow(); const b = glb(minimal()); new DataView(b).setUint32(12, 999999, true); expect(() => inspectGlb(b)).toThrow(); });
+  it('rejects external resources and invalid references', () => { const d = minimal(); Object.assign(d.buffers[0], { uri: 'https://example.com/car.bin' }); expect(() => inspectGlb(glb(d))).toThrow(/URI/); const e = minimal(); e.nodes[0].mesh = 999; expect(() => inspectGlb(glb(e))).toThrow(/reference/); });
+  it('rejects accessor overruns and cyclic hierarchies', () => { const d = minimal(); d.accessors[0].count = 999; expect(() => inspectGlb(glb(d))).toThrow(/layout/); const e = minimal(); Object.assign(e.nodes[0], { children: [0] }); expect(() => inspectGlb(glb(e))).toThrow(/cyclic/); });
+  it('never claims mesh to CAD conversion', () => { expect(exportCapabilities({ format: 'glb', originalAvailable: true, redistributionAllowed: true })).toEqual({ glb: true, gltf: false, step: false, conversionImplemented: false }); expect(exportCapabilities({ format: 'step', originalAvailable: true, redistributionAllowed: false }).step).toBe(false); });
+});
+describe('interaction contracts', () => {
+  it('rejects nonunit axes, duplicates, unknown fields and invalid limits', () => { const m = manifest(); m.articulations[0].axis = [0, 2, 0]; expect(() => interactionManifestSchema.parse(m)).toThrow(); const n = manifest(); n.articulations.push(n.articulations[0]); expect(() => interactionManifestSchema.parse(n)).toThrow(); expect(() => interactionManifestSchema.parse({ ...manifest(), arbitrary: true })).toThrow(); const o = manifest(); o.articulations[0].maxRadians = -1; expect(() => interactionManifestSchema.parse(o)).toThrow(); });
+  it('round trips compatible state and rejects stale or unknown controls', () => { const m = interactionManifestSchema.parse(manifest()); const config = { version: 1, assetId: m.assetId, assetSha256: m.assetSha256, paint: { body: '#123abc' }, articulations: { door: 1 } }; expect(validateConfiguration(JSON.parse(JSON.stringify(config)), m)).toEqual(config); expect(() => validateConfiguration({ ...config, assetSha256: 'b'.repeat(64) }, m)).toThrow(/revision/); expect(() => validateConfiguration({ ...config, articulations: { door: 2 } }, m)).toThrow(); expect(() => validateConfiguration({ ...config, paint: { wheels: '#123456' } }, m)).toThrow(); });
+});

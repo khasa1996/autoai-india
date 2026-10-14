@@ -1,0 +1,21 @@
+{
+  "name": "@autoai/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/autoai-expo expo start",
+    "export:web": "__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/autoai-expo expo export --platform web --output-dir dist/web",
+    "export:android": "__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/autoai-expo expo export --platform android --output-dir dist/android",
+    "export:ios": "__UNSAFE_EXPO_HOME_DIRECTORY=/tmp/autoai-expo expo export --platform ios --output-dir dist/ios",
+    "export": "npm run export:web && npm run export:android && npm run export:ios"
+  },
+  "devDependencies": {
+    "@expo/metro-runtime": "57.0.17",
+    "expo": "57.0.28",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-web": "~0.21.0"
+  }
+}
